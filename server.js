@@ -20,7 +20,7 @@ app.use(cors({
 }));
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increase payload limit for base64 files
 
 // Routes
 app.use('/api/registration', registrationRoutes);
@@ -34,7 +34,13 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Server Error:', err.message, err.stack);
+  console.error('Server Error:', {
+    message: err.message,
+    stack: err.stack,
+    method: req.method,
+    url: req.url,
+    body: req.body,
+  });
   res.status(500).json({ message: 'Internal Server Error', error: err.message });
 });
 
