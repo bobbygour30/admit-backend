@@ -1,6 +1,5 @@
 require('dotenv').config(); // Load .env at the top
 const express = require('express');
-const cors = require('cors');
 const connectDB = require('./config/db');
 const registrationRoutes = require('./routes/registration');
 const admitCardRoutes = require('./routes/admitCard');
@@ -11,13 +10,23 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
-// CORS
-app.use(cors({
-  origin: ['https://admitcard-frontend.vercel.app', 'http://localhost:5173'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+// Custom CORS Middleware (replacing cors package)
+app.use((req, res, next) => {
+  const allowedOrigins = ['https://admitcard-frontend.vercel.app', 'http://localhost:5173'];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  next();
+});
 
 // Middleware
 app.use(express.json({ limit: '10mb' })); // Increase payload limit for base64 files
