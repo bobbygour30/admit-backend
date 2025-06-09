@@ -13,7 +13,7 @@ connectDB();
 
 // CORS
 app.use(cors({
-  origin: ['https://admit-card-three.vercel.app', 'http://localhost:5173'],
+  origin: ['https://admitcard-frontend.vercel.app', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
