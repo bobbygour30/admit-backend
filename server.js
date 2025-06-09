@@ -12,10 +12,9 @@ connectDB();
 
 // Custom CORS Middleware (replacing cors package)
 app.use((req, res, next) => {
-  const allowedOrigins = ['https://admitcard-frontend.vercel.app', 'http://localhost:5173'];
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin); // Reflect the request's origin
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
