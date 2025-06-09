@@ -1,5 +1,6 @@
 require('dotenv').config(); // Load .env at the top
 const express = require('express');
+const cors = require('cors');
 const connectDB = require('./config/db');
 const registrationRoutes = require('./routes/registration');
 const admitCardRoutes = require('./routes/admitCard');
