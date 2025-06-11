@@ -5,18 +5,30 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   fatherName: { type: String, required: true },
   motherName: { type: String, required: true },
-  dob: { type: Date, required: true },
+  dob: { type: String, required: true },
   gender: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   mobile: { type: String, required: true },
   address: { type: String, required: true },
   aadhaarNumber: { type: String, required: true, unique: true },
-  selectedPosts: [{ type: String }],
-  districtPreferences: [{ type: String }],
-  collegeBoard: String,
-  percentage: String,
+  selectedPosts: [{ type: String, required: true }],
+  districtPreferences: [{ type: String, required: true }],
+  higherEducation: { 
+    type: String, 
+    required: true,
+    enum: ['10', '12th', 'Graduate', 'Postgraduate']
+  },
+  percentage: { 
+    type: String, 
+    required: true,
+    match: [/^(?:100|[0-9]{1,2})(\.[0-9]{1,2})?$/, 'Invalid percentage format']
+  },
   postDesignation: String,
-  timeInYears: String,
+  organizationName: String,
+  totalExperience: { 
+    type: String,
+    match: [/^[0-9]+(\.[0-9]{1,2})?$/, 'Invalid experience format']
+  },
   photo: { type: String, required: true },
   signature: { type: String, required: true },
   cv: String,

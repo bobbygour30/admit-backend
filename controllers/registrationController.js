@@ -9,51 +9,48 @@ const registerUser = async (req, res, next) => {
 
     const {
       union, name, fatherName, motherName, dob, gender, email, mobile, address, aadhaarNumber,
-      selectedPosts, districtPreferences, collegeBoard, percentage, postDesignation, timeInYears,
+      selectedPosts, districtPreferences, higherEducation, percentage, postDesignation, organizationName, totalExperience,
       photo, signature, cv, workCert, qualCert,
     } = req.body;
 
     // Validate required fields
     if (!union || !name || !fatherName || !motherName || !dob || !gender || !email || !mobile || 
-        !address || !aadhaarNumber || !photo || !signature || !qualCert || !districtPreferences?.length) {
+        !address || !aadhaarNumber || !selectedPosts?.length || !districtPreferences?.length || 
+        !higherEducation || !percentage || !photo || !signature || !qualCert) {
       console.error('Missing required fields');
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    // Validate base64 data
-    const isValidBase64 = (data) => {
-      if (typeof data !== 'string' || !data.startsWith('data:image/')) {
+    // Validate base64 data with specific size limits
+    const isValidBase64 = (data, maxSizeKB, fieldName) => {
+      if (typeof data !== 'string' || !data.startsWith('data:')) {
+        console.error(`Invalid base64 data for ${fieldName}`);
         return false;
       }
       const base64Data = data.split(',')[1];
       const sizeInBytes = (base64Data.length * 3) / 4;
-      const sizeInMB = sizeInBytes / (1024 * 1024);
-      if (sizeInMB > 10) {
-        console.error(`Base64 data too large: ${sizeInMB.toFixed(2)} MB`);
+      const sizeInKB = sizeInBytes / 1024;
+      if (sizeInKB > maxSizeKB) {
+        console.error(`Base64 data too large for ${fieldName}: ${sizeInKB.toFixed(2)} KB > ${maxSizeKB} KB`);
         return false;
       }
       return true;
     };
 
-    if (!isValidBase64(photo)) {
-      console.error('Invalid base64 data for photo');
-      return res.status(400).json({ message: 'Invalid photo data format or size exceeds 10MB' });
+    if (!isValidBase64(photo, 200, 'photo')) {
+      return res.status(400).json({ message: 'Invalid photo data format or size exceeds 200KB' });
     }
-    if (!isValidBase64(signature)) {
-      console.error('Invalid base64 data for signature');
-      return res.status(400).json({ message: 'Invalid signature data format or size exceeds 10MB' });
+    if (!isValidBase64(signature, 100, 'signature')) {
+      return res.status(400).json({ message: 'Invalid signature data format or size exceeds 100KB' });
     }
-    if (!isValidBase64(qualCert)) {
-      console.error('Invalid base64 data for qualCert');
-      return res.status(400).json({ message: 'Invalid qualification certificate data format or size exceeds 10MB' });
+    if (!isValidBase64(qualCert, 2048, 'qualCert')) {
+      return res.status(400).json({ message: 'Invalid qualification certificate data format or size exceeds 2MB' });
     }
-    if (cv && !isValidBase64(cv)) {
-      console.error('Invalid base64 data for cv');
-      return res.status(400).json({ message: 'Invalid CV data format or size exceeds 10MB' });
+    if (cv && !isValidBase64(cv, 2048, 'cv')) {
+      return res.status(400).json({ message: 'Invalid CV data format or size exceeds 2MB' });
     }
-    if (workCert && !isValidBase64(workCert)) {
-      console.error('Invalid base64 data for workCert');
-      return res.status(400).json({ message: 'Invalid work certificate data format or size exceeds 10MB' });
+    if (workCert && !isValidBase64(workCert, 2048, 'workCert')) {
+      return res.status(400).json({ message: 'Invalid work certificate data format or size exceeds 2MB' });
     }
 
     // Upload files to Cloudinary
@@ -120,10 +117,11 @@ const registerUser = async (req, res, next) => {
       aadhaarNumber,
       selectedPosts,
       districtPreferences,
-      collegeBoard: collegeBoard || null,
-      percentage: percentage || null,
-      postDesignation: postDesignation || null,
-      timeInYears: timeInYears || null,
+      higherEducation,
+      percentage,
+      postDesignation,
+      organizationName,
+      totalExperience,
       photo: photoUrl,
       signature: signatureUrl,
       cv: cvUrl,
