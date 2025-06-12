@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { getAdmitCard, emailAdmitCard } = require('../controllers/admitCardController');
+const { getAdmitCard } = require('../controllers/admitCardController');
 
-router.get('/', getAdmitCard);
-router.post('/email', emailAdmitCard);
+// Routes
+router.get('/', getAdmitCard); // GET /api/admit-card
 
 module.exports = router;

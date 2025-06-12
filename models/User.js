@@ -37,10 +37,13 @@ const userSchema = new mongoose.Schema({
   idProof: String,
   examCenter: String,
   examShift: String,
-  applicationNumber: { type: String, unique: true },
+  applicationNumber: { type: String, required: true, unique: true },
   paymentStatus: { type: Boolean, default: false },
   transactionNumber: String,
   transactionDate: Date,
+  razorpayPaymentId: String,
+  razorpayOrderId: String,
+  razorpaySignature: String
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

@@ -11,12 +11,29 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
+// Define allowed origins based on environment
+const allowedOrigins = [
+  'https://admitcard-frontend.vercel.app', // Production frontend
+  process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : null, // Development frontend
+].filter(Boolean); // Remove null values
+
 // CORS configuration
-app.use(cors({
-  origin: 'https://admitcard-frontend.vercel.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g., mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // Allow cookies/auth headers if needed
+  })
+);
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
@@ -40,7 +57,10 @@ app.use((err, req, res, next) => {
     url: req.url,
     body: req.body,
   });
-  res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  res.status(err.status || 500).json({
+    message: err.status ? err.message : 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+  });
 });
 
 const PORT = process.env.PORT || 5000;
