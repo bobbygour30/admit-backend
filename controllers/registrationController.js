@@ -188,4 +188,36 @@ const uploadDocument = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, uploadDocument };
+const getAllUsers = async (req, res, next) => {
+  try {
+    console.log('Raw request body:', req.body); // Log raw body
+    const { username, password } = req.body;
+    console.log('Received credentials for getAllUsers:', { username, password }); // Log parsed credentials
+
+    // Trim credentials to avoid whitespace issues
+    const trimmedUsername = username?.trim();
+    const trimmedPassword = password?.trim();
+    console.log('Trimmed credentials:', { trimmedUsername, trimmedPassword });
+
+    if (trimmedUsername !== 'admin@examportal.com' || trimmedPassword !== 'Admin@2024#') {
+      console.error('Invalid admin credentials', { trimmedUsername, trimmedPassword });
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    console.log('Fetching all users');
+    const users = await User.find().select(
+      'applicationNumber name email mobile examCenter examShift paymentStatus'
+    );
+    console.log(`Retrieved ${users.length} users`);
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Error fetching users:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    });
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};
+
+module.exports = { registerUser, uploadDocument, getAllUsers };
