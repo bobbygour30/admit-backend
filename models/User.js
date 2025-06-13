@@ -7,10 +7,10 @@ const userSchema = new mongoose.Schema({
   motherName: { type: String, required: true },
   dob: { type: String, required: true },
   gender: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true },
   mobile: { type: String, required: true },
   address: { type: String, required: true },
-  aadhaarNumber: { type: String, required: true, unique: true },
+  aadhaarNumber: { type: String, required: true },
   selectedPosts: [{ type: String, required: true }],
   districtPreferences: [{ type: String, required: true }],
   higherEducation: { 
