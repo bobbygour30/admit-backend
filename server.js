@@ -72,4 +72,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-module.exports = app; // Export for Vercel
+const PORT = process.env.PORT || 5000;
+if (process.env.NODE_ENV !== 'production' || !module.exports) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app; // Keep for Vercel

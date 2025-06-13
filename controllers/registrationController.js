@@ -21,6 +21,10 @@ const registerUser = async (req, res, next) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    // Standardize union to 'Harit' for consistency
+    const normalizedUnion = union === 'Harit Union' ? 'Harit' : union;
+    console.log('Normalized union:', normalizedUnion);
+
     // Validate base64 data with specific size limits
     const isValidBase64 = (data, maxSizeKB, fieldName) => {
       if (typeof data !== 'string' || !data.startsWith('data:')) {
@@ -65,7 +69,6 @@ const registerUser = async (req, res, next) => {
           message: error.message,
           name: error.name,
           stack: error.stack,
-          error: error,
         });
         throw new Error(`Failed to upload to ${folder}: ${error.message || 'Unknown error'}`);
       }
@@ -77,8 +80,8 @@ const registerUser = async (req, res, next) => {
     const cvUrl = cv ? await uploadFile(cv, 'cbt2025/cvs') : null;
     const workCertUrl = workCert ? await uploadFile(workCert, 'cbt2025/workCerts') : null;
 
-    // Allocate exam center and shift
-    console.log('Allocating center and shift');
+    // Allocate exam center
+    console.log('Allocating center');
     const availableCenters = await Center.find({
       $expr: { $lt: ['$currentBookings', '$capacity'] }
     });
@@ -88,14 +91,29 @@ const registerUser = async (req, res, next) => {
     }
     const center = availableCenters.sort((a, b) => a.currentBookings - b.currentBookings)[0];
 
+    // Allocate shift in order: A, B, C
+    console.log('Allocating shift');
     const availableShifts = await Shift.find({
       $expr: { $lt: ['$currentBookings', '$capacity'] }
-    });
-    if (!availableShifts.length) {
+    }).sort({ name: 1 });
+    let selectedShift = null;
+    for (const shift of availableShifts) {
+      if (shift.name === 'A' && shift.currentBookings < 250) {
+        selectedShift = shift;
+        break;
+      } else if (shift.name === 'B' && shift.currentBookings < 250 && (!availableShifts.find(s => s.name === 'A' && s.currentBookings < 250))) {
+        selectedShift = shift;
+        break;
+      } else if (shift.name === 'C' && shift.currentBookings < 250 && (!availableShifts.find(s => s.name === 'A' || s.name === 'B').currentBookings < 250)) {
+        selectedShift = shift;
+        break;
+      }
+    }
+
+    if (!selectedShift) {
       console.error('No available shifts');
       return res.status(400).json({ message: 'No available shifts' });
     }
-    const shift = availableShifts.sort((a, b) => a.currentBookings - b.currentBookings)[0];
 
     // Generate application number
     console.log('Generating application number');
@@ -105,7 +123,7 @@ const registerUser = async (req, res, next) => {
     // Create user
     console.log('Creating user');
     const user = new User({
-      union,
+      union: normalizedUnion,
       name,
       fatherName,
       motherName,
@@ -128,8 +146,9 @@ const registerUser = async (req, res, next) => {
       workCert: workCertUrl,
       qualCert: qualCertUrl,
       examCenter: center.name,
-      examShift: `${shift.name} (${shift.time}, ${shift.date})`,
+      examShift: `${selectedShift.name} (${selectedShift.time}, ${selectedShift.date})`,
       applicationNumber,
+      paymentStatus: normalizedUnion === 'Harit' ? true : false, // Set for Harit users
     });
 
     // Save to database
@@ -139,7 +158,7 @@ const registerUser = async (req, res, next) => {
     // Update center and shift bookings
     console.log('Updating center and shift bookings');
     await Center.updateOne({ _id: center._id }, { $inc: { currentBookings: 1 } });
-    await Shift.updateOne({ _id: shift._id }, { $inc: { currentBookings: 1 } });
+    await Shift.updateOne({ _id: selectedShift._id }, { $inc: { currentBookings: 1 } });
 
     console.log('Registration successful:', applicationNumber);
     res.status(201).json({ applicationNumber });
@@ -148,6 +167,12 @@ const registerUser = async (req, res, next) => {
       message: error.message,
       name: error.name,
       stack: error.stack,
+      env: process.env.NODE_ENV,
+      mongoUri: process.env.MONGO_URI ? 'Set' : 'Not set',
+      cloudinaryConfig: {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Not set',
+        apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Not set',
+      },
     });
     next(error);
   }
@@ -155,12 +180,31 @@ const registerUser = async (req, res, next) => {
 
 const uploadDocument = async (req, res, next) => {
   try {
-    console.log('Received document upload data:', req.body);
     const { applicationNumber, idProof } = req.body;
-
+    console.log('uploadDocument: applicationNumber:', applicationNumber);
     if (!applicationNumber || !idProof) {
-      console.error('Missing application number or ID proof');
+      console.error('Missing applicationNumber or idProof');
       return res.status(400).json({ message: 'Application number and ID proof are required' });
+    }
+
+    // Validate idProof base64
+    const isValidBase64 = (data, maxSizeKB) => {
+      if (typeof data !== 'string' || !data.startsWith('data:')) {
+        console.error('Invalid base64 data for idProof');
+        return false;
+      }
+      const base64Data = data.split(',')[1];
+      const sizeInBytes = (base64Data.length * 3) / 4;
+      const sizeInKB = sizeInBytes / 1024;
+      if (sizeInKB > maxSizeKB) {
+        console.error(`Base64 data too large for idProof: ${sizeInKB.toFixed(2)} KB > ${maxSizeKB} KB`);
+        return false;
+      }
+      return true;
+    };
+
+    if (!isValidBase64(idProof, 2048, 'idProof')) {
+      return res.status(400).json({ message: 'Invalid ID proof data format or size exceeds 2MB' });
     }
 
     const user = await User.findOne({ applicationNumber });
@@ -169,32 +213,72 @@ const uploadDocument = async (req, res, next) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log('Uploading ID proof to Cloudinary');
+    console.log('Uploading idProof to Cloudinary for user:', user._id);
     const idProofUrl = await cloudinary.uploader.upload(idProof, { folder: 'cbt2025/idProofs' });
-
     user.idProof = idProofUrl.secure_url;
-    console.log('Saving updated user');
-    await user.save();
 
-    console.log('Document uploaded successfully');
-    res.status(200).json({ message: 'Document uploaded successfully' });
+    // Ensure paymentStatus is true for Harit users
+    if (user.union === 'Harit' || user.union === 'Harit Union') {
+      user.paymentStatus = true;
+      console.log('Set paymentStatus to true for Harit user:', applicationNumber);
+    } else {
+      console.log('Non-Harit user, paymentStatus unchanged:', user.paymentStatus);
+    }
+
+    await user.save();
+    console.log('Document uploaded, user details:', {
+      applicationNumber,
+      union: user.union,
+      paymentStatus: user.paymentStatus,
+    });
+
+    res.status(200).json({
+      message: 'Document uploaded successfully',
+      union: user.union,
+      paymentStatus: user.paymentStatus,
+    });
   } catch (error) {
     console.error('Document upload error:', {
       message: error.message,
       name: error.name,
       stack: error.stack,
     });
-    next(error);
+    res.status(500).json({ message: 'Document upload failed' });
+  }
+};
+
+const getUser = async (req, res, next) => {
+  try {
+    const { applicationNumber } = req.query;
+    console.log('getUser: applicationNumber:', applicationNumber);
+    if (!applicationNumber) {
+      console.error('Missing application number');
+      return res.status(400).json({ message: 'Application number is required' });
+    }
+    const user = await User.findOne({ applicationNumber }).select('union paymentStatus');
+    console.log('getUser: user found:', user);
+    if (!user) {
+      console.error('User not found for applicationNumber:', applicationNumber);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    console.log('User fetched:', applicationNumber);
+    res.status(200).json({ union: user.union, paymentStatus: user.paymentStatus });
+  } catch (error) {
+    console.error('Error fetching user:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    });
+    res.status(500).json({ message: 'Failed to fetch user' });
   }
 };
 
 const getAllUsers = async (req, res, next) => {
   try {
-    console.log('Raw request body:', req.body); // Log raw body
+    console.log('Raw request body:', req.body);
     const { username, password } = req.body;
-    console.log('Received credentials for getAllUsers:', { username, password }); // Log parsed credentials
+    console.log('Received credentials for getAllUsers:', { username, password });
 
-    // Trim credentials to avoid whitespace issues
     const trimmedUsername = username?.trim();
     const trimmedPassword = password?.trim();
     console.log('Trimmed credentials:', { trimmedUsername, trimmedPassword });
@@ -220,4 +304,4 @@ const getAllUsers = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, uploadDocument, getAllUsers };
+module.exports = { registerUser, uploadDocument, getUser, getAllUsers };

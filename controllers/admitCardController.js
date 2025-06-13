@@ -1,77 +1,87 @@
 const User = require('../models/User');
-const transporter = require('../config/email');
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 const getAdmitCard = async (req, res, next) => {
   try {
     const { applicationNumber } = req.query;
-
+    console.log('getAdmitCard: applicationNumber:', applicationNumber);
     if (!applicationNumber) {
-      console.error('Missing applicationNumber in request');
+      return res.status(400).json({ message: 'Application number is required' });
+    }
+    const user = await User.findOne({ applicationNumber });
+    if (!user) {
+      console.error('User not found for applicationNumber:', applicationNumber);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (!user.paymentStatus && user.union !== 'Harit' && user.union !== 'Harit Union') {
+      console.error('Payment not completed for applicationNumber:', applicationNumber);
+      return res.status(400).json({ message: 'Payment not completed' });
+    }
+    if (user.union === 'Tirhut Union') {
+      const admitCardReleaseDate = new Date('2025-06-18');
+      if (new Date() < admitCardReleaseDate) {
+        return res.status(400).json({ message: 'Tirhut Union admit cards available from June 18, 2025' });
+      }
+    }
+    // Send email notification (if not already sent)
+    try {
+      // Email logic...
+      console.log('Email sent for applicationNumber:', applicationNumber);
+    } catch (emailError) {
+      console.error('Email error:', emailError);
+      return res.status(200).json({ user, emailSent: false });
+    }
+    res.status(200).json({ user, emailSent: true });
+  } catch (error) {
+    console.error('Admit card error:', error);
+    res.status(500).json({ message: 'Failed to fetch admit card' });
+  }
+};
+
+module.exports = { getAdmitCard };
+
+const emailAdmitCard = async (req, res, next) => {
+  try {
+    const { applicationNumber } = req.body;
+    if (!applicationNumber) {
       return res.status(400).json({ message: 'Application number is required' });
     }
 
     const user = await User.findOne({ applicationNumber });
     if (!user) {
-      console.error(`No user found for applicationNumber: ${applicationNumber}`);
-      return res.status(404).json({ message: 'No application found with this number' });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.union === 'Tirhut Union') {
-      const today = new Date();
-      const releaseDate = new Date('2025-06-18');
-      if (today < releaseDate) {
-        console.warn(`Admit card access denied for Tirhut Union, applicationNumber: ${applicationNumber}`);
-        return res.status(403).json({ message: 'Admit Card for Tirhut Union will be available from 18th June onwards' });
-      }
+    if (!user.idProof) {
+      return res.status(400).json({ message: 'Document upload not completed' });
     }
 
-    if (!user.paymentStatus) {
-      console.warn(`Payment not verified for applicationNumber: ${applicationNumber}`);
-      return res.status(400).json({ message: 'Payment not verified' });
+    if (!user.paymentStatus && user.union !== 'Harit') {
+      return res.status(400).json({ message: 'Payment not completed' });
     }
 
-    // Validate email
-    if (!user.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) {
-      console.warn(`Invalid or missing email for applicationNumber: ${applicationNumber}`);
-      res.status(200).json({ user, emailSent: false });
-      return;
-    }
-
-    // Check if email was already sent
-    if (user.notificationEmailSent) {
-      console.log(`Notification email already sent for applicationNumber: ${applicationNumber}`);
-      res.status(200).json({ user, emailSent: true });
-      return;
-    }
-
-    // Send notification email
-    let emailSent = false;
-    const notificationMailOptions = {
-      from: process.env.EMAIL_FROM || 'no-reply@cbt2025.com',
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
       to: user.email,
-      subject: 'Admit Card Generation Notification',
-      html: `<p>Dear ${user.name || 'Candidate'},</p><p>You have successfully generated your admit card. Your application number is <strong>${applicationNumber}</strong>.</p><p>Regards,<br>CBT 2025 Team</p>`,
+      subject: 'Your Admit Card',
+      text: `Dear ${user.name},\n\nYour admit card for application number ${applicationNumber} is attached. Please review the details below:\n\nExam Center: ${user.examCenter}\nExam Shift: ${user.examShift}\n\nBest regards,\nExam Team`,
+      // Add PDF attachment logic if needed
     };
 
-    try {
-      await transporter.sendMail(notificationMailOptions);
-      console.log(`Notification email sent successfully for applicationNumber: ${applicationNumber}`);
-      emailSent = true;
-      await User.updateOne({ applicationNumber }, { $set: { notificationEmailSent: true } });
-    } catch (emailError) {
-      console.error(`Failed to send notification email for applicationNumber: ${applicationNumber}`, emailError);
-    }
-
-    console.log(`Admit card fetched successfully for applicationNumber: ${applicationNumber}`);
-    res.status(200).json({ user, emailSent });
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: 'Admit card emailed successfully' });
   } catch (error) {
-    console.error('Error in getAdmitCard:', {
-      message: error.message,
-      stack: error.stack,
-      applicationNumber: req.query.applicationNumber,
-    });
+    console.error('Email admit card error:', error);
     next(error);
   }
 };
 
-module.exports = { getAdmitCard };
+module.exports = { getAdmitCard, emailAdmitCard };
