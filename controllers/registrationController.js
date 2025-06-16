@@ -290,10 +290,18 @@ const getAllUsers = async (req, res, next) => {
 
     console.log('Fetching all users');
     const users = await User.find().select(
-      'applicationNumber name email mobile examCenter examShift paymentStatus'
+      'applicationNumber union name fatherName motherName dob gender email mobile address aadhaarNumber ' +
+      'selectedPosts districtPreferences higherEducation percentage postDesignation organizationName totalExperience ' +
+      'examCenter examShift paymentStatus transactionNumber transactionDate'
     );
-    console.log(`Retrieved ${users.length} users`);
-    res.status(200).json(users);
+    // Ensure selectedPosts and districtPreferences are arrays
+    const sanitizedUsers = users.map(user => ({
+      ...user._doc,
+      selectedPosts: Array.isArray(user.selectedPosts) ? user.selectedPosts : [],
+      districtPreferences: Array.isArray(user.districtPreferences) ? user.districtPreferences : [],
+    }));
+    console.log(`Retrieved ${sanitizedUsers.length} users`);
+    res.status(200).json(sanitizedUsers);
   } catch (error) {
     console.error('Error fetching users:', {
       message: error.message,
