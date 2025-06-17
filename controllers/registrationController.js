@@ -98,13 +98,13 @@ const registerUser = async (req, res, next) => {
     }).sort({ name: 1 });
     let selectedShift = null;
     for (const shift of availableShifts) {
-      if (shift.name === 'A' && shift.currentBookings < 250) {
+      if (shift.name === 'A' && shift.currentBookings < 150) {
         selectedShift = shift;
         break;
-      } else if (shift.name === 'B' && shift.currentBookings < 250 && (!availableShifts.find(s => s.name === 'A' && s.currentBookings < 250))) {
+      } else if (shift.name === 'B' && shift.currentBookings < 150 && (!availableShifts.find(s => s.name === 'A' && s.currentBookings < 150))) {
         selectedShift = shift;
         break;
-      } else if (shift.name === 'C' && shift.currentBookings < 250 && (!availableShifts.find(s => s.name === 'A' || s.name === 'B').currentBookings < 250)) {
+      } else if (shift.name === 'C' && shift.currentBookings < 150 && (!availableShifts.find(s => s.name === 'A' || s.name === 'B').currentBookings < 150)) {
         selectedShift = shift;
         break;
       }

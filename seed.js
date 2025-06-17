@@ -9,9 +9,9 @@ const centers = [
 ];
 
 const shifts = [
-  { name: 'A', time: '9:00 AM - 10:00 AM', date: '23-06-2025', capacity: 250, currentBookings: 0 },
-  { name: 'B', time: '12:00 PM - 1:00 PM', date: '23-06-2025', capacity: 250, currentBookings: 0 },
-  { name: 'C', time: '3:00 PM - 4:00 PM', date: '23-06-2025', capacity: 250, currentBookings: 0 },
+  { name: 'A', time: '9:00 AM - 10:00 AM', date: '23-06-2025', capacity: 150, currentBookings: 0 },
+  { name: 'B', time: '12:00 PM - 1:00 PM', date: '23-06-2025', capacity: 150, currentBookings: 0 },
+  { name: 'C', time: '3:00 PM - 4:00 PM', date: '23-06-2025', capacity: 150, currentBookings: 0 },
 ];
 
 const seedDB = async () => {
