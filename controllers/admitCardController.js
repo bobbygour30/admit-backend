@@ -26,9 +26,9 @@ const getAdmitCard = async (req, res, next) => {
       return res.status(400).json({ message: 'Payment not completed' });
     }
     if (user.union === 'Tirhut Union') {
-      const admitCardReleaseDate = new Date('2025-06-18');
+      const admitCardReleaseDate = new Date('2025-06-24');
       if (new Date() < admitCardReleaseDate) {
-        return res.status(400).json({ message: 'Tirhut Union admit cards available from June 18, 2025' });
+        return res.status(400).json({ message: 'Tirhut Union admit cards available from June 24, 2025' });
       }
     }
     // Send email notification (if not already sent)

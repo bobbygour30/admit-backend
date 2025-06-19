@@ -91,9 +91,10 @@ const registerUser = async (req, res, next) => {
     }
     const center = availableCenters.sort((a, b) => a.currentBookings - b.currentBookings)[0];
 
-    // Allocate shift in order: A, B, C
-    console.log('Allocating shift');
+    // Allocate shift in order: A, B, C, filtered by union
+    console.log('Allocating shift for union:', normalizedUnion);
     const availableShifts = await Shift.find({
+      union: normalizedUnion, // Filter by user's union
       $expr: { $lt: ['$currentBookings', '$capacity'] }
     }).sort({ name: 1 });
     let selectedShift = null;
@@ -111,8 +112,8 @@ const registerUser = async (req, res, next) => {
     }
 
     if (!selectedShift) {
-      console.error('No available shifts');
-      return res.status(400).json({ message: 'No available shifts' });
+      console.error('No available shifts for union:', normalizedUnion);
+      return res.status(400).json({ message: `No available shifts for union ${normalizedUnion}` });
     }
 
     // Generate application number
