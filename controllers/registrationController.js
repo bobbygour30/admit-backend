@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Center = require('../models/Center');
+const mongoose = require('mongoose');
 const Shift = require('../models/Shift');
 const cloudinary = require('../config/cloudinary');
 
@@ -21,7 +22,7 @@ const registerUser = async (req, res, next) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    // Standardize union to 'Harit' for consistency
+    // Standardize union to 'Harit' or 'Tirhut Union' for consistency
     const normalizedUnion = union === 'Harit Union' ? 'Harit' : union;
     console.log('Normalized union:', normalizedUnion);
 
@@ -91,21 +92,32 @@ const registerUser = async (req, res, next) => {
     }
     const center = availableCenters.sort((a, b) => a.currentBookings - b.currentBookings)[0];
 
-    // Allocate shift in order: A, B, C, filtered by union
+    // Allocate shift in order: A, B, C, filtered by union and date
     console.log('Allocating shift for union:', normalizedUnion);
-    const availableShifts = await Shift.find({
-      union: normalizedUnion, // Filter by user's union
+    let shiftQuery = {
+      union: normalizedUnion,
       $expr: { $lt: ['$currentBookings', '$capacity'] }
-    }).sort({ name: 1 });
+    };
+    
+    // Apply date filter based on union
+    if (normalizedUnion === 'Harit') {
+      shiftQuery.date = '2025-07-01'; // Harit users assigned to 1 July 2025
+    } else if (normalizedUnion === 'Tirhut Union') {
+      shiftQuery.date = '2025-06-29'; // Tirhut users assigned to 29 June 2025
+    }
+
+    const availableShifts = await Shift.find(shiftQuery).sort({ name: 1 });
     let selectedShift = null;
+    const maxCapacity = normalizedUnion === 'Harit' ? 250 : 150; // Harit: 250, Tirhut: 150
+
     for (const shift of availableShifts) {
-      if (shift.name === 'A' && shift.currentBookings < 150) {
+      if (shift.name === 'A' && shift.currentBookings < maxCapacity) {
         selectedShift = shift;
         break;
-      } else if (shift.name === 'B' && shift.currentBookings < 150 && (!availableShifts.find(s => s.name === 'A' && s.currentBookings < 150))) {
+      } else if (shift.name === 'B' && shift.currentBookings < maxCapacity && !availableShifts.find(s => s.name === 'A' && s.currentBookings < maxCapacity)) {
         selectedShift = shift;
         break;
-      } else if (shift.name === 'C' && shift.currentBookings < 150 && (!availableShifts.find(s => s.name === 'A' || s.name === 'B').currentBookings < 150)) {
+      } else if (shift.name === 'C' && shift.currentBookings < maxCapacity && !availableShifts.find(s => (s.name === 'A' || s.name === 'B') && s.currentBookings < maxCapacity)) {
         selectedShift = shift;
         break;
       }
@@ -113,7 +125,7 @@ const registerUser = async (req, res, next) => {
 
     if (!selectedShift) {
       console.error('No available shifts for union:', normalizedUnion);
-      return res.status(400).json({ message: `No available shifts for union ${normalizedUnion}` });
+      return res.status(400).json({ message: `No available shifts for union ${normalizedUnion} on ${normalizedUnion === 'Harit' ? '1 July 2025' : '29 June 2025'}` });
     }
 
     // Generate application number
@@ -149,17 +161,35 @@ const registerUser = async (req, res, next) => {
       examCenter: center.name,
       examShift: `${selectedShift.name} (${selectedShift.time}, ${selectedShift.date})`,
       applicationNumber,
-      paymentStatus: normalizedUnion === 'Harit' ? true : false, // Set for Harit users
+      paymentStatus: normalizedUnion === 'Harit' ? true : false,
     });
 
-    // Save to database
-    console.log('Saving user');
-    await user.save();
-
-    // Update center and shift bookings
-    console.log('Updating center and shift bookings');
-    await Center.updateOne({ _id: center._id }, { $inc: { currentBookings: 1 } });
-    await Shift.updateOne({ _id: selectedShift._id }, { $inc: { currentBookings: 1 } });
+    // Save user and update bookings atomically
+    console.log('Saving user and updating bookings');
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await user.save({ session });
+        const updateResult = await Shift.updateOne(
+          { _id: selectedShift._id, currentBookings: { $lt: selectedShift.capacity } },
+          { $inc: { currentBookings: 1 } },
+          { session }
+        );
+        if (updateResult.matchedCount === 0) {
+          throw new Error('Shift is now full');
+        }
+        await Center.updateOne(
+          { _id: center._id, currentBookings: { $lt: center.capacity } },
+          { $inc: { currentBookings: 1 } },
+          { session }
+        );
+      });
+    } catch (error) {
+      console.error('Transaction error:', error);
+      return res.status(400).json({ message: `Registration failed: ${error.message || 'Shift or center is full'}` });
+    } finally {
+      session.endSession();
+    }
 
     console.log('Registration successful:', applicationNumber);
     res.status(201).json({ applicationNumber });
