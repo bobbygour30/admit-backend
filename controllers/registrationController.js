@@ -22,6 +22,7 @@ const registerUser = async (req, res, next) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    // Normalize union to 'Harit' or 'Tirhut'
     // Standardize union to 'Harit' or 'Tirhut Union' for consistency
     const normalizedUnion = union === 'Harit Union' ? 'Harit' : union;
     console.log('Normalized union:', normalizedUnion);
@@ -161,7 +162,7 @@ const registerUser = async (req, res, next) => {
       examCenter: center.name,
       examShift: `${selectedShift.name} (${selectedShift.time}, ${selectedShift.date})`,
       applicationNumber,
-      paymentStatus: normalizedUnion === 'Harit' ? true : false,
+      paymentStatus: false, // Set to false for all users
     });
 
     // Save user and update bookings atomically
@@ -247,14 +248,6 @@ const uploadDocument = async (req, res, next) => {
     console.log('Uploading idProof to Cloudinary for user:', user._id);
     const idProofUrl = await cloudinary.uploader.upload(idProof, { folder: 'cbt2025/idProofs' });
     user.idProof = idProofUrl.secure_url;
-
-    // Ensure paymentStatus is true for Harit users
-    if (user.union === 'Harit' || user.union === 'Harit Union') {
-      user.paymentStatus = true;
-      console.log('Set paymentStatus to true for Harit user:', applicationNumber);
-    } else {
-      console.log('Non-Harit user, paymentStatus unchanged:', user.paymentStatus);
-    }
 
     await user.save();
     console.log('Document uploaded, user details:', {
