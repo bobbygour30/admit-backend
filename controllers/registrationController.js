@@ -316,7 +316,7 @@ const getAllUsers = async (req, res, next) => {
     const users = await User.find().select(
       'applicationNumber union name fatherName motherName dob gender email mobile address aadhaarNumber ' +
       'selectedPosts districtPreferences higherEducation percentage postDesignation organizationName totalExperience ' +
-      'examCenter examShift paymentStatus transactionNumber transactionDate'
+      'examCenter examShift paymentStatus transactionNumber transactionDate photo signature cv workCert qualCert'
     );
     // Ensure selectedPosts and districtPreferences are arrays
     const sanitizedUsers = users.map(user => ({
@@ -336,4 +336,68 @@ const getAllUsers = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, uploadDocument, getUser, getAllUsers };
+const deleteUser = async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    const { applicationNumber } = req.params;
+    console.log('deleteUser: applicationNumber:', applicationNumber, 'credentials:', { username, password });
+
+    const trimmedUsername = username?.trim();
+    const trimmedPassword = password?.trim();
+
+    if (trimmedUsername !== 'admin@examportal.com' || trimmedPassword !== 'Admin@2024#') {
+      console.error('Invalid admin credentials', { trimmedUsername, trimmedPassword });
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const user = await User.findOne({ applicationNumber }).session(session);
+        if (!user) {
+          console.error('User not found for applicationNumber:', applicationNumber);
+          return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Decrement shift and center bookings
+        const shiftMatch = user.examShift.match(/^(A|B|C)/);
+        const shiftName = shiftMatch ? shiftMatch[1] : null;
+        const shiftDate = user.union === 'Harit' ? '2025-07-01' : '2025-06-29';
+
+        if (shiftName) {
+          await Shift.updateOne(
+            { name: shiftName, union: user.union, date: shiftDate },
+            { $inc: { currentBookings: -1 } },
+            { session }
+          );
+        }
+
+        await Center.updateOne(
+          { name: user.examCenter },
+          { $inc: { currentBookings: -1 } },
+          { session }
+        );
+
+        // Delete the user
+        await User.deleteOne({ applicationNumber }, { session });
+        console.log('User deleted:', applicationNumber);
+      });
+
+      res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+      console.error('Transaction error in deleteUser:', error);
+      res.status(400).json({ message: `Failed to delete user: ${error.message || 'Unknown error'}` });
+    } finally {
+      session.endSession();
+    }
+  } catch (error) {
+    console.error('Error deleting user:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    });
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+};
+
+module.exports = { registerUser, uploadDocument, getUser, getAllUsers, deleteUser };
